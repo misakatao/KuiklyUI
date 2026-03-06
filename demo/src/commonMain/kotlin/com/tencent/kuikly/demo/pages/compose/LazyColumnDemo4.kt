@@ -17,8 +17,10 @@ package com.tencent.kuikly.demo.pages.compose
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import com.tencent.kuikly.compose.ComposeContainer
 import com.tencent.kuikly.compose.foundation.background
 import com.tencent.kuikly.compose.foundation.border
@@ -38,12 +40,18 @@ import com.tencent.kuikly.compose.foundation.layout.size
 import com.tencent.kuikly.compose.foundation.lazy.LazyColumn
 import com.tencent.kuikly.compose.foundation.lazy.rememberLazyListState
 import com.tencent.kuikly.compose.material3.Text
+import com.tencent.kuikly.compose.material3.pullToRefreshItem
+import com.tencent.kuikly.compose.material3.rememberPullToRefreshState
 import com.tencent.kuikly.compose.setContent
 import com.tencent.kuikly.compose.ui.Alignment
 import com.tencent.kuikly.compose.ui.Modifier
 import com.tencent.kuikly.compose.ui.graphics.Color
+import com.tencent.kuikly.compose.ui.text.style.TextAlign
+import com.tencent.kuikly.compose.ui.unit.Dp
 import com.tencent.kuikly.compose.ui.unit.dp
+import com.tencent.kuikly.compose.ui.unit.sp
 import com.tencent.kuikly.core.annotations.Page
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Page("LazyColumnDemo4")
@@ -63,6 +71,8 @@ class LazyColumnDemo4 : ComposeContainer() {
         val scope = rememberCoroutineScope()
         val interactionSource = remember { MutableInteractionSource() }
         val isDragged by interactionSource.collectIsDraggedAsState()
+        var isRefreshing by remember { mutableStateOf(false) }
+        val pullToRefreshState = rememberPullToRefreshState(isRefreshing)
 
         Column(modifier = Modifier.fillMaxSize()) {
 
@@ -164,6 +174,21 @@ class LazyColumnDemo4 : ComposeContainer() {
 //                verticalArrangement = Arrangement.spacedBy(8.dp),
 //                interactionSource = interactionSource
             ) {
+                // 使用默认指示器
+                pullToRefreshItem(
+                    state = pullToRefreshState,
+                    onRefresh = {
+                        scope.launch {
+                            isRefreshing = true
+                            delay(2000)
+                            isRefreshing = false
+                        }
+                    },
+                    scrollState = state,
+                    content = { progress, refreshing, threshold ->
+                        CustomRefreshIndicator(progress, refreshing, threshold)
+                    }
+                )
                 items(300) { index ->
                     Box(
                         modifier =
@@ -200,8 +225,8 @@ class LazyColumnDemo4 : ComposeContainer() {
                 state.layoutInfo.visibleItemsInfo.forEach { itemInfo ->
                     Text(
                         "Index: ${itemInfo.index}, " +
-                            "Offset: ${itemInfo.offset}, " +
-                            "Size: ${itemInfo.size}",
+                                "Offset: ${itemInfo.offset}, " +
+                                "Size: ${itemInfo.size}",
                         color = Color.DarkGray,
                         modifier = Modifier.padding(start = 16.dp, top = 4.dp),
                     )
@@ -209,4 +234,102 @@ class LazyColumnDemo4 : ComposeContainer() {
             }
         }
     }
-} 
+}
+
+@Composable
+private fun CustomRefreshIndicator(
+    pullProgress: Float,
+    isRefreshing: Boolean,
+    refreshThreshold: Dp
+) {
+    // 根据状态计算背景色和效果
+    val backgroundColor = when {
+        isRefreshing -> Color.Blue.copy(alpha = 0.2f)
+        pullProgress >= 1f -> Color.Green.copy(alpha = 0.15f)
+        pullProgress > 0.5f -> Color.Cyan.copy(alpha = 0.1f)
+        pullProgress > 0f -> Color.Gray.copy(alpha = 0.05f)
+        else -> Color.Transparent
+    }
+
+    val borderColor = when {
+        isRefreshing -> Color.Blue
+        pullProgress >= 1f -> Color.Green
+        pullProgress > 0.5f -> Color.Cyan
+        else -> Color.Gray.copy(alpha = 0.3f)
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(refreshThreshold)
+            .background(backgroundColor)
+            .padding(1.dp)
+            .background(Color.White)
+            .padding(1.dp)
+            .background(borderColor.copy(alpha = 0.1f)),
+        contentAlignment = Alignment.Center
+    ) {
+        if (isRefreshing) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "🌀 Loading...",
+                    fontSize = 18.sp,
+                    color = Color.Blue,
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    text = "请稍候",
+                    fontSize = 12.sp,
+                    color = Color.Blue.copy(alpha = 0.7f),
+                    textAlign = TextAlign.Center
+                )
+            }
+        } else {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                val emoji = when {
+                    pullProgress >= 1f -> "🚀"
+                    pullProgress > 0.5f -> "⬆️"
+                    else -> "⬇️"
+                }
+
+                val text = when {
+                    pullProgress >= 1f -> "松开立即刷新"
+                    pullProgress > 0.5f -> "继续下拉"
+                    else -> "下拉刷新数据"
+                }
+
+                val textColor = when {
+                    pullProgress >= 1f -> Color.Green
+                    pullProgress > 0.5f -> Color.Cyan
+                    else -> Color.Gray
+                }
+
+                Text(
+                    text = emoji,
+                    fontSize = 20.sp,
+                    textAlign = TextAlign.Center
+                )
+
+                Text(
+                    text = text,
+                    fontSize = 14.sp,
+                    color = textColor,
+                    textAlign = TextAlign.Center
+                )
+
+                if (pullProgress > 0f) {
+                    Text(
+                        text = "${(pullProgress * 100).toInt()}%",
+                        fontSize = 10.sp,
+                        color = textColor.copy(alpha = 0.7f),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+    }
+}
